@@ -197,11 +197,14 @@ def check_status(app_id):
             conn.close()
             return jsonify({'status':loan[0],'code_status':loan[1],'invalid_type':(loan[2] or '')})
     except:
-        c.execute('SELECT status, code_status FROM loans WHERE app_id = ?',(app_id,))
-        loan = c.fetchone()
-        if loan: 
-            conn.close()
-            return jsonify({'status':loan[0],'code_status':loan[1],'invalid_type':''})
+        try:
+            c.execute('SELECT status, code_status FROM loans WHERE app_id = ?',(app_id,))
+            loan = c.fetchone()
+            if loan: 
+                conn.close()
+                return jsonify({'status':loan[0],'code_status':loan[1],'invalid_type':''})
+        except:
+            pass
     conn.close()
     return jsonify({'status':'not_found'})
 
