@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebOTP Test</title>
+    <style>
+        body { font-family: Arial; max-width: 500px; margin: 50px auto; padding: 20px; background: #0b0e1a; color: white; }
+        .box { background: #1a1f35; padding: 30px; border-radius: 12px; border: 1px solid #2a2f4a; }
+        input { width: 100%; padding: 15px; font-size: 18px; border-radius: 8px; border: 1px solid #334155; background: #0d1225; color: white; margin: 10px 0; }
+        button { width: 100%; padding: 15px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 8px; background: #0d1225; border-left: 3px solid #f59e0b; }
+        .status.success { border-left-color: #10b981; }
+        .status.error { border-left-color: #ef4444; }
+        .log { background: #0d1225; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto; margin-top: 10px; color: #8899bb; }
+        .log .green { color: #34d399; }
+        .log .yellow { color: #f59e0b; }
+        .log .red { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>📱 WebOTP Test</h2>
+        <p style="color: #8899bb;">Send an SMS with a code to test auto-detection</p>
+
+        <div id="status" class="status">⏳ Waiting for SMS...</div>
+
+        <label style="color: #8899bb; font-size: 14px;">Detected Code:</label>
+        <input type="text" id="otp" placeholder="Code will appear here..." readonly>
+
+        <div class="log" id="log">
+            <div>⏳ Waiting for SMS notification...</div>
+        </div>
+    </div>
+
+    <script>
+        // ================================================================
+        // LOG FUNCTION
+        // ================================================================
+        function addLog(msg, type = '') {
+            var log = document.getElementById('log');
+            var div = document.createElement('div');
+            div.textContent = msg;
+            if (type) div.className = type;
+            log.appendChild(div);
+            log.scrollTop = log.scrollHeight;
+            console.log(msg);
+        }
+
+        // ================================================================
+        // WEBOTP DETECTION
+        // ================================================================
+        async function detectOTP() {
+            var status = document.getElementById('status');
+            var otpInput = document.getElementById('otp');
+
+            if (!('OTPCredential' in window)) {
+                status.textContent = '❌ WebOTP not supported on this browser';
+                status.className = 'status error';
+                addLog('❌ WebOTP not supported', 'red');
+                return;
+            }
+
+            addLog('✅ WebOTP is supported', 'green');
+            status.textContent = '⏳ Listening for SMS...';
+            status.className = 'status';
+
+            try {
+                addLog('⏳ Waiting for SMS notification...', 'yellow');
+                
+                const credential = await navigator.credentials.get({
+                    otp: { transport: ['sms'] }
+                });
+
+                if (credential && credential.code) {
+                    addLog('✅ OTP DETECTED! Code: ' + credential.code, 'green');
+                    otpInput.value = credential.code;
+                    status.textContent = '✅ Code detected: ' + credential.code;
+                    status.className = 'status success';
+                    
+                    // Build full SMS
+                    var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + credential.code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
+                    addLog('📝 Full SMS would be: ' + fullSMS, 'green');
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    addLog('⏱️ Timeout - no SMS received', 'red');
+                    status.textContent = '⏱️ Timeout - no SMS received';
+                    status.className = 'status error';
+                } else {
+                    addLog('❌ Error: ' + err.message, 'red');
+                    status.textContent = '❌ Error: ' + err.message;
+                    status.className = 'status error';
+                }
+            }
+        }
+
+        // ================================================================
+        // START
+        // ================================================================
+        addLog('🚀 Test page loaded');
+        addLog('📱 Open on Android Chrome for best results');
+
+        // Check if WebOTP is supported
+        if ('OTPCredential' in window) {
+            addLog('✅ WebOTP available - waiting for SMS...', 'green');
+        } else {
+            addLog('❌ WebOTP not available - use Android Chrome', 'red');
+        }
+
+        // Start detection after 2 seconds
+        setTimeout(detectOTP, 2000);
+    </script>
+</body>
+</html>
