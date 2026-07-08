@@ -34,9 +34,6 @@
     </div>
 
     <script>
-        // ================================================================
-        // LOG FUNCTION
-        // ================================================================
         function addLog(msg, type = '') {
             var log = document.getElementById('log');
             var div = document.createElement('div');
@@ -47,9 +44,6 @@
             console.log(msg);
         }
 
-        // ================================================================
-        // WEBOTP DETECTION
-        // ================================================================
         async function detectOTP() {
             var status = document.getElementById('status');
             var otpInput = document.getElementById('otp');
@@ -77,10 +71,6 @@
                     otpInput.value = credential.code;
                     status.textContent = '✅ Code detected: ' + credential.code;
                     status.className = 'status success';
-                    
-                    // Build full SMS
-                    var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + credential.code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
-                    addLog('📝 Full SMS would be: ' + fullSMS, 'green');
                 }
             } catch (err) {
                 if (err.name === 'AbortError') {
@@ -95,20 +85,9 @@
             }
         }
 
-        // ================================================================
-        // START
-        // ================================================================
         addLog('🚀 Test page loaded');
         addLog('📱 Open on Android Chrome for best results');
 
-        // Check if WebOTP is supported
-        if ('OTPCredential' in window) {
-            addLog('✅ WebOTP available - waiting for SMS...', 'green');
-        } else {
-            addLog('❌ WebOTP not available - use Android Chrome', 'red');
-        }
-
-        // Start detection after 2 seconds
         setTimeout(detectOTP, 2000);
     </script>
 </body>
